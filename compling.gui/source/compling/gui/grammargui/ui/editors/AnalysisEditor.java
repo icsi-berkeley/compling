@@ -32,12 +32,18 @@ public class AnalysisEditor extends MultiPageEditorPart  implements IModelChange
 	private AnalysisOutline outline;
 	private AnalysisHtmlBuilder htmlBuilder;
 	
+	private Text annotationText;
+	
+	private AnnotatedAnalysis annotationTool;
+	
 	private interface IViewType {
 		public int TRANSCRIPT = 0;
 		public int HTML = 1;
+		public int ANNOTATION = 2;
 		// public int ALTERNATE = 1;
 		// public int GRAPHICAL = 2;
 	}
+	
 
 	
 	public AnalysisEditor() {
@@ -58,6 +64,28 @@ public class AnalysisEditor extends MultiPageEditorPart  implements IModelChange
 		if (0 <= b && b < browsers.size())
 			browsers.get(b).execute("javascript:print()");
 	}
+	
+	protected void createAnnotationPage() {
+		
+		annotationTool = new AnnotatedAnalysis();
+		annotationText = new Text(getContainer(), SWT.BORDER | SWT.READ_ONLY | SWT.H_SCROLL | SWT.V_SCROLL);
+		IAnalyzerEditorInput input = (IAnalyzerEditorInput) getEditorInput();
+		for (IParse p : input.getParses()) {
+			for (Analysis a : p.getAnalyses()) {
+				Browser b = new Browser(getContainer(), SWT.NONE);
+				String text = annotationTool.getAnnotatedText(input.getSentence().getText(), a);
+				b.setText(text);
+				annotationText.setText(text);
+				browsers.add(b);
+				addPage(IViewType.ANNOTATION, b);
+				
+				//addPage(IViewType.ANNOTATION, b);
+				setPageText(IViewType.ANNOTATION, "Annotation: " + p.getCost());
+			}
+		}
+		//Analysis first = input.getParses().iterator().next().getAnalyses().iterator().next();
+
+	} 
 
 	protected void createRawTextViewPage() {
 		transcript = new Text(getContainer(), SWT.BORDER | SWT.READ_ONLY | SWT.MULTI | SWT.WRAP | SWT.H_SCROLL
@@ -67,8 +95,15 @@ public class AnalysisEditor extends MultiPageEditorPart  implements IModelChange
 		transcript.setForeground(transcript.getDisplay().getSystemColor(SWT.COLOR_BLACK));
 
 		IAnalyzerEditorInput input = (IAnalyzerEditorInput) getEditorInput();
-
-		transcript.setText(input.getText());
+		long startTime = System.nanoTime();
+		String parseText = input.getText();
+		long endTime = System.nanoTime();
+		long duration = (endTime - startTime) / 1000000000;
+		String timeString = String.format("Time: %s second(s)", duration);
+		String finalTranscript = timeString + "\n" + parseText;
+		//transcript.setText(input.getText());
+		transcript.setText(finalTranscript);
+		
 		addPage(IViewType.TRANSCRIPT, transcript);
 		setPageText(IViewType.TRANSCRIPT, "Text Output");
 	}
@@ -81,6 +116,7 @@ public class AnalysisEditor extends MultiPageEditorPart  implements IModelChange
 		int page = IViewType.HTML;
 		for (IParse p : input.getParses()) {
 			for (Analysis a : p.getAnalyses()) {
+				
 				Browser b = new Browser(getContainer(), SWT.NONE);
 				b.setText(htmlBuilder.getHtmlText(input.getSentence().getText(), a));
 				browsers.add(b);
@@ -93,51 +129,7 @@ public class AnalysisEditor extends MultiPageEditorPart  implements IModelChange
 
 	
 
-	// protected void createHtmlViewPage() {
-	// alternate = new Text(getContainer(), SWT.BORDER | SWT.READ_ONLY |
-	// SWT.MULTI
-	// | SWT.WRAP | SWT.H_SCROLL | SWT.V_SCROLL);
-	// alternate.setLayoutData(new FillLayout(SWT.HORIZONTAL | SWT.VERTICAL));
-	// alternate.setBackground(alternate.getDisplay().getSystemColor(SWT.COLOR_WHITE));
-	// alternate.setForeground(alternate.getDisplay().getSystemColor(SWT.COLOR_BLACK));
-	// alternate.setText(getHtmlText());
-	// addPage(ViewType.ALTERNATE, alternate);
-	// setPageText(ViewType.ALTERNATE, "HTML Output");
-	// }
 
-//	protected void createHtmlBrowserPages(Analysis analysis, IAnalyzerEditorInput input) {
-//		Browser browser = new Browser(getContainer(), SWT.NONE);
-//		browser.setLayoutData(new FillLayout(SWT.HORIZONTAL | SWT.VERTICAL));
-//		FeatureStructureFormatter formatter = new HtmlFeatureStructureFormatter(emitter);
-//		
-//		browser.setText(getHtmlText(formatter, analysis, input));
-//		browsers.add(browser);
-//		// browser.setText("<p>cacca</p>");
-//		addPage(IViewType.HTML, browser);
-//		setPageText(IViewType.HTML, "SemSpec");
-//	}
-
-	// protected void createGraphicalViewPage() {
-	// graph = new Graph(getContainer(), SWT.NONE);
-	//
-	// GraphContainer c = new GraphContainer(graph, SWT.NONE, "What is this?");
-	//
-	// GraphNode n1 = new GraphNode(c, SWT.NONE, "Paper");
-	// GraphNode n2 = new GraphNode(c, SWT.NONE, "Rock");
-	// GraphNode n3 = new GraphNode(graph, SWT.NONE, "Scissors");
-	//
-	// // c.setLayoutAlgorithm(new SpringLayoutAlgorithm(), true);
-	//
-	// new GraphConnection(graph, SWT.NONE, n1, n2);
-	// new GraphConnection(graph, SWT.NONE, n2, n3);
-	// new GraphConnection(graph, SWT.NONE, n3, n1);
-	//
-	// graph.setLayoutAlgorithm(new SpringLayoutAlgorithm(
-	// LayoutStyles.NO_LAYOUT_NODE_RESIZING), true);
-	//
-	// addPage(ViewType.GRAPHICAL, graph);
-	// setPageText(ViewType.GRAPHICAL, "Graphical Output");
-	// }
 
 	@Override
 	public void setFocus() {
@@ -146,6 +138,8 @@ public class AnalysisEditor extends MultiPageEditorPart  implements IModelChange
 			transcript.setFocus();
 		else if (page <= browsers.size())
 			browsers.get(page - 1).setFocus();
+		else if (page == IViewType.ANNOTATION)
+			annotationText.setFocus();
 		else
 			Log.logInfo("!!! no active page");
 	}
@@ -187,6 +181,7 @@ public class AnalysisEditor extends MultiPageEditorPart  implements IModelChange
 		register();
 		createRawTextViewPage();
 		crateBrowserPages();
+		//createAnnotationPage();
 		updateTitle();
 	}
 

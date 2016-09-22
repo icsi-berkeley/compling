@@ -12,6 +12,7 @@ import compling.gui.grammargui.ui.views.MapTreeView;
 import compling.gui.grammargui.ui.views.OntologyTreeView;
 import compling.gui.grammargui.ui.views.SchemaTreeView;
 import compling.gui.grammargui.ui.views.SituationTreeView;
+import compling.gui.grammargui.ui.views.TokenView;
 import compling.gui.grammargui.ui.views.TypeSystemNodeView;
 
 public class AnalysisPerspective implements IPerspectiveFactory {
@@ -29,10 +30,10 @@ public class AnalysisPerspective implements IPerspectiveFactory {
 		String editorArea = layout.getEditorArea();
 		layout.setEditorAreaVisible(true);
 
-		createLeftFolder(layout, editorArea);
+		//createLeftFolder(layout, editorArea);
 		createRightFolder(layout, editorArea);
 		createTopFolder(layout, editorArea);
-		createBottomFolder(layout, editorArea);
+		//createBottomFolder(layout, editorArea);
 
 		// Add shortcuts to menu
 		layout.addShowViewShortcut(GrammarTreeView.ID);
@@ -46,6 +47,7 @@ public class AnalysisPerspective implements IPerspectiveFactory {
 		layout.addShowViewShortcut(IConsoleConstants.ID_CONSOLE_VIEW);
 		layout.addShowViewShortcut(IPageLayout.ID_BOOKMARKS);
 		layout.addShowViewShortcut(IPageLayout.ID_PROBLEM_VIEW);
+		//layout.addShowViewShortcut(TokenView.ID);
 //		layout.addShowViewShortcut(LOG_VIEW_ID);
 		layout.addShowViewShortcut(COMMON_EXPLORER_ID);
 		layout.addShowViewShortcut(CONTENT_OUTLINE_ID);

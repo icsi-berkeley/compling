@@ -46,6 +46,8 @@ PROBABILITY = 0[\.][0-9]+ | [\.][0-9]+ | 1 | 1[\.]0
 <YYINITIAL> "<--"               { return new Symbol(sym.ASSIGN, ECGConstants.ASSIGN); }
 <YYINITIAL> "<->"               { return new Symbol(sym.IDENTIFY, ECGConstants.IDENTIFY); }
 <YYINITIAL> "<-->"              { return new Symbol(sym.IDENTIFY, ECGConstants.IDENTIFY); }
+<YYINITIAL> "#"              	{ return new Symbol(sym.NEGATE, ECGConstants.NEGATE); }
+<YYINITIAL> "<="              	{ return new Symbol(sym.UNIDIRECTIONAL_ASSIGN, ECGConstants.UNIDIRECTIONAL_ASSIGN); }
 <YYINITIAL> "constructional"    { return new Symbol(sym.CONSTRUCTIONAL); }
 <YYINITIAL> "construction"      { return new Symbol(sym.CONSTRUCTION); }
 <YYINITIAL> "optional"          { return new Symbol(sym.OPTIONAL); }
@@ -71,6 +73,8 @@ PROBABILITY = 0[\.][0-9]+ | [\.][0-9]+ | 1 | 1[\.]0
 <YYINITIAL> "roles"             { return new Symbol(sym.ROLES); }
 <YYINITIAL> "map"               { return new Symbol(sym.MAP); }
 <YYINITIAL> "situation"         { return new Symbol(sym.SITUATION); }
+<YYINITIAL> "package"			{ return new Symbol(sym.PACKAGE); }
+<YYINITIAL> "import"			{ return new Symbol(sym.IMPORT); }
 <YYINITIAL> \"{STRING_TEXT}\"   { return new Symbol(sym.STR, new String(yytext())); }
 <YYINITIAL> ({IDENT}\.)+{IDENT} { return new Symbol(sym.SLOTCHAIN, new String(yytext())); }
 <YYINITIAL> {IDENT}             { return new Symbol(sym.IDENTIFIER, 

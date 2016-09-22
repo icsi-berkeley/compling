@@ -3,6 +3,7 @@ package compling.gui.grammargui.builder;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -15,8 +16,10 @@ import org.eclipse.core.resources.IResourceDeltaVisitor;
 import org.eclipse.core.resources.IResourceVisitor;
 import org.eclipse.core.resources.IncrementalProjectBuilder;
 import org.eclipse.core.runtime.CoreException;
+import org.eclipse.core.runtime.IPath;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.IStatus;
+import org.eclipse.core.runtime.Path;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.jface.dialogs.ErrorDialog;
 import org.eclipse.swt.widgets.Display;
@@ -53,7 +56,7 @@ public class GrammarBuilder extends IncrementalProjectBuilder {
 
 	/** The default character set. Let's see if it needs to be moved elsewhere. */
 	private static final Charset DEFAULT_CHARSET = Charset.forName(ECGConstants.DEFAULT_ENCODING);
-
+	
 	class SampleDeltaVisitor implements IResourceDeltaVisitor {
 		public boolean visit(IResourceDelta delta) throws CoreException {
 			IResource resource = delta.getResource();
@@ -134,7 +137,14 @@ public class GrammarBuilder extends IncrementalProjectBuilder {
 
 				reader.read(file, new IErrorListener() {
 					public void notify(String errorMessage, Location location, Severity severity) {
+						System.out.println(errorMessage);
 						addMarker(file, errorMessage, location, severity);
+					}
+
+					@Override
+					public void notify(String errorMessage, Severity severity) {
+						System.out.println(errorMessage);
+						
 					}
 				});
 			}
@@ -154,6 +164,12 @@ public class GrammarBuilder extends IncrementalProjectBuilder {
 				public void notify(String message, Location location, Severity severity) {
 					addMarker(file, message, location, severity);
 				}
+
+				@Override
+				public void notify(String errorMessage, Severity severity) {
+					System.out.println(errorMessage);
+					
+				}
 			});
 		}
 		catch (Exception e) {
@@ -164,6 +180,8 @@ public class GrammarBuilder extends IncrementalProjectBuilder {
 	private void deleteMarkers(IFile file) {
 		try {
 			file.deleteMarkers(MARKER_TYPE, false, IResource.DEPTH_ZERO);
+			//file.getParent().deleteMarkers(type, includeSubtypes, depth);
+			//file.getParent().deleteMarkers("compling.gui.grammarProblem", true, 0);
 		}
 		catch (CoreException e) {
 			Log.logError(e, "Can't delete marker for file %s: exception: %s\n", file.getName(), e);
@@ -176,18 +194,20 @@ public class GrammarBuilder extends IncrementalProjectBuilder {
 	 * @param gatherer
 	 * @return
 	 */
-	protected ContextModel buildContextModel(ResourceGatherer gatherer) throws CoreException {
+	public ContextModel buildContextModel(ResourceGatherer gatherer) throws CoreException {
 		SampleResourceVisitor visitor = new SampleResourceVisitor();
-		for (IResource r : gatherer.getOntologyFiles(getProject())) {
-			r.accept(visitor);
-		}
-
+//		for (IResource r : gatherer.getOntologyFiles(getProject())) {
+//			r.accept(visitor);
+//		}
+		boolean onts = true;
+		String[] exts = gatherer.getOntologyExtensions().split(" ");
 		List<File> files = gatherer.getOntologyFiles();
 		if (files.size() == 1) {
 			return new ContextModel(files.get(0).getAbsolutePath(), DEFAULT_CHARSET);
+		} else if (onts) {
+			return new ContextModel(files, exts[2], DEFAULT_CHARSET);
 		}
 		else {
-			String[] exts = gatherer.getOntologyExtensions().split(" ");
 			return new ContextModel(files, exts[0], exts[1], DEFAULT_CHARSET);
 		}
 	}
@@ -196,6 +216,9 @@ public class GrammarBuilder extends IncrementalProjectBuilder {
 				throws TypeSystemException, CoreException, IOException {
 		return OWLOntology.fromPreferences(manager.getPreferences()).getTypeSystem();
 	}
+	
+	
+		
 
 	// Setup grammar with a ContextModel or just an ontology
 	protected Grammar prebuildGrammar(PrefsManager manager) {
@@ -239,19 +262,73 @@ public class GrammarBuilder extends IncrementalProjectBuilder {
 	 * @throws IOException
 	 */
 	protected void fullBuild(PrefsManager manager, final IProgressMonitor monitor) throws CoreException {
-		List<File> files = new ResourceGatherer(manager.getPreferences()).getGrammarFiles();
+		
+		
+		ResourceGatherer gatherer = new ResourceGatherer(manager.getPreferences());
+		List<File> files = gatherer.getImportFiles(); //new ResourceGatherer(manager.getPreferences()).getGrammarFiles();
+		
 		
 		int stepCount = 1 + 1 + files.size();
 		monitor.beginTask("Building grammar", stepCount);
 		
 		Grammar grammar = prebuildGrammar(manager);
-		monitor.worked(1);
+		//grammar.addImport(manager.getPreferences().getSetting(AP.PACKAGE_NAME));
+		List<String> packageNames = manager.getPreferences().getList(AP.PACKAGE_NAME);
+		for (String name : packageNames) {
+	    	grammar.addImport(name);
+	    	grammar.addToDeclared(name);
+	    }
+		
+		if (gatherer.getImportFiles().size() > 0) {
 
-		for (File f : files) {
-			IFile grammarFile = (IFile) getProject().findMember(f.getPath());
-			buildGrammar(grammarFile, grammar);
-			monitor.worked(1);
+			ArrayList<Grammar> grammarList = new ArrayList<Grammar>();
+			List<List<File>> importList = gatherer.getImportFilesDir();
+			List<String> seenPackages = new ArrayList<String>();
+			for (List<File> fileList : importList) {
+				Grammar tempGrammar = prebuildGrammar(manager);
+				for (File f : fileList) {
+					IFile grammarFile = (IFile) getProject().findMember(f.getPath());
+					buildGrammar(grammarFile, tempGrammar);
+					monitor.worked(1);
+				}
+				grammarList.add(tempGrammar);
+			} 
+			
+			
+			for (Grammar g : grammarList) {
+				grammar.addRelations(g.getPackageRelations());
+				grammar.sortDeclaredPackages();
+				for (String request : g.getImport()) {
+					grammar.addImport(request);
+				}
+				for (Grammar.Schema schema : g.getSchemasNoUpdate()) {
+					if (grammar.getDeclaredPackages().contains(schema.getPackage())
+							&& !seenPackages.contains(schema.getPackage())) {
+//					if (grammar.getImport().contains(schema.getPackage()) 
+//							&& !seenPackages.contains(schema.getPackage())) {
+						Grammar.Schema s = grammar.new Schema(schema.getName(), schema.getKind(), schema.getParents(), schema.getContents());
+						s.setLocation(schema.getLocation());
+						grammar.addSchema(s);
+					}
+				}
+				for (Grammar.Construction cxn : g.getCxnsNoUpdate()) {
+					if (grammar.getDeclaredPackages().contains(cxn.getPackage())
+//					if (grammar.getImport().contains(cxn.getPackage())
+							&& !seenPackages.contains(cxn.getPackage())) {
+						Grammar.Construction c = grammar.new Construction(cxn.getName(), cxn.getKind(), cxn.getParents(), 
+								 cxn.getFormBlock(), cxn.getMeaningBlock(), cxn.getConstructionalBlock());
+						c.setLocation(cxn.getLocation());
+						grammar.addConstruction(c);
+					}
+				}
+				seenPackages.addAll(g.getPackages());
+			}
+			
+		
 		}
+		
+		
+
 
 		updateLocality(grammar);
 
@@ -267,6 +344,7 @@ public class GrammarBuilder extends IncrementalProjectBuilder {
 			}
 		});
 		try {
+			grammar.setPrefs(manager.getPreferences());
 			grammar.update();
 			monitor.worked(1);
 		}
@@ -288,6 +366,8 @@ public class GrammarBuilder extends IncrementalProjectBuilder {
 		GrammarChecker.setErrorListener(GrammarChecker.DEFAULT_ERROR_LISTENER);
 		manager.setGrammar(grammar);
 		updateDecorators();
+		
+		//grammar.buildTokenAndMorpher();
 
 	}
 

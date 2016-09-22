@@ -2,6 +2,8 @@ package compling.gui.grammargui.ui.editors;
 
 import java.io.IOException;
 import java.net.URL;
+import java.util.HashMap;
+import java.util.List;
 
 import org.eclipse.core.runtime.FileLocator;
 import org.eclipse.core.runtime.Platform;
@@ -11,6 +13,8 @@ import compling.gui.grammargui.util.HtmlFeatureStructureFormatter;
 import compling.gui.grammargui.util.Log;
 import compling.gui.grammargui.util.TextEmitter;
 import compling.parser.ecgparser.Analysis;
+import compling.parser.ecgparser.CxnalSpan;
+import compling.util.Arrays;
 
 public class AnalysisHtmlBuilder {
 	protected static final String CSS_ENTRY = "css";
@@ -77,12 +81,46 @@ public class AnalysisHtmlBuilder {
 	protected void emitHtmlEpilogue() {
 		emitter.sayln(0, "</body></html>");
 	}
+	
+	protected HashMap<String, String> matchSpansToText(String sentence, Analysis a) {
+		
+		HashMap<String, String> spansToText = new HashMap<String, String>();
+		List<CxnalSpan> spans = a.getSpans();
+		
+		List<String> split_test = Arrays.split(sentence);
+		//System.out.println(split_test);
+		
+		//String[] split = sentence.replace("?", " ? ").replace("!", " ! ").replace(".", " . ").replace(",", " , ").trim().split(" ");
+		
+		//String[] split = sentence.replace("", " ").trim().split(" ");
+
+		for (CxnalSpan span : spans) {
+			if (span.getType() != null) {
+				String text = "";
+				String type = span.getType().getName() + "[" + span.getSlotID()+ "]";
+				//System.out.println(type);
+				int left = span.left;
+				int right = span.right;
+				for (int index=left; index<right; index++) {
+					text += split_test.get(index) + " ";
+					//System.out.println(text);
+				}
+				spansToText.put(type, text);
+			}
+		}
+		
+		
+		
+		return spansToText;
+	}
 
 	protected String getHtmlText(String sentence, Analysis a) {
 		emitter.reset();
+		
+		HashMap<String, String> spansToText = matchSpansToText(sentence, a);
 	
 		emitHtmlPrologue(sentence);
-		formatter.format(a.getFeatureStructure());
+		formatter.format(a.getFeatureStructure(), spansToText);
 		emitHtmlEpilogue();
 	
 		return emitter.getOutput();

@@ -15,8 +15,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
+import org.eclipse.core.internal.resources.ResourceException;
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IFolder;
 import org.eclipse.core.resources.IProject;
@@ -65,7 +67,9 @@ import compling.gui.grammargui.util.ISpecificationReader;
 import compling.gui.grammargui.util.Log;
 import compling.gui.grammargui.util.ModelChangedEventManager;
 import compling.gui.grammargui.util.SpecificationReaderBuilder;
+import compling.gui.util.Utils;
 import compling.parser.ecgparser.ECGAnalyzer;
+import compling.parser.ecgparser.ECGTokenReader.ECGToken;
 
 /**
  * PrefsManager insulates the application from the analayzer's details.
@@ -91,6 +95,8 @@ public class PrefsManager implements IResourceChangeListener, ISaveParticipant {
 	private IWorkspace workspace;
 	private NullProgressMonitor nullProgressMonitor;
 	private IPath prefsPath;
+	
+
 
 	private Set<String> symbols;
 	private HashMap<String, IFile> nodeToFileMap;
@@ -134,6 +140,9 @@ public class PrefsManager implements IResourceChangeListener, ISaveParticipant {
 				project.build(IncrementalProjectBuilder.FULL_BUILD, nullProgressMonitor);
 			}
 		});
+		//ECGAnalyzer analyzer = getAnalyzer();
+		Utils.flushCaches();
+		//analyzer.reloadTokens();
 	}
 
 	private void resetTables() {
@@ -259,6 +268,12 @@ public class PrefsManager implements IResourceChangeListener, ISaveParticipant {
 
 	private IFile mapFileNameToResource(String fileName) {
 		return (IFile) project.findMember(fileName);
+	}
+	
+	public IFile getFileFor(ECGToken token) {
+		String fileName = token.getLocation().getFile();
+		Assert.isTrue(fileName != null, format("fileName for %s is null!", token));
+		return mapFileNameToResource(fileName);
 	}
 
 	public IFile getFileFor(TypeSystemNode node) {
@@ -401,10 +416,49 @@ public class PrefsManager implements IResourceChangeListener, ISaveParticipant {
 
 		eventManager.fireModelChanged(this, new AnalyzerSentence[0], removed);
 	}
+	
+	public String getPackageAsText(String pkgName) {
+		String text = "";
+		ArrayList<String> importedByActive = new ArrayList<String>();
+		ArrayList<String> importedByInactive = new ArrayList<String>();
+		ArrayList<String> imports = new ArrayList<String>();
+		for (Entry<String, ArrayList<String>> e : getGrammar().getPackageRelations().entrySet()) {
+			if (e.getValue().contains(pkgName)) {
+				imports.add(e.getKey());
+			} else if (e.getKey().equals(pkgName)) {
+				// Check if package is part of "working grammar".
+				for (String pkg : e.getValue()) {
+					if (getGrammar().getDeclaredPackages().contains(pkg)) {
+						importedByActive.add(pkg);
+					} else {
+						importedByInactive.add(pkg);
+					}
+				}
+			}
+		}
+		String uses = imports.toString();
+		String usedBy = importedByActive.toString();
+		String usedByInactive = importedByInactive.toString();
+		if (imports.isEmpty()) {
+			uses = "None.";
+		}
+		if (importedByActive.isEmpty()) {
+			usedBy = "None.";
+		}
+		if (importedByInactive.isEmpty()) {
+			usedByInactive = "None.";
+		}
+		text = "Package: " + pkgName + "\n Imports: " + uses + "\n Imported by (active): " + usedBy + "\n Imported by (inactive): " + usedByInactive;
+		return text;
+	}
 
 	public String getContentAsText(String nodeName) {
 		if (grammar == null)
 			return null;
+		
+		if (getGrammar().getDeclaredPackages().contains(nodeName)) {
+			return getPackageAsText(nodeName);
+		}
 
 		if (nameToNode == null) {
 			nameToNode = new HashMap<String, TypeSystemNode>();
@@ -553,11 +607,59 @@ public class PrefsManager implements IResourceChangeListener, ISaveParticipant {
 			if (!prefsFile.exists())
 				prefsFile.createLink(prefsPath, IResource.FILE, nullProgressMonitor);
 			IPath prefsBase = prefsPath.removeLastSegments(1);
+			/*
 			for (String p : prefs.getList(AP.GRAMMAR_PATHS)) {
 				IFolder folder = project.getFolder(p);
 				if (!folder.exists())
 					folder.createLink(prefsBase.append(p).makeAbsolute(), IResource.NONE, nullProgressMonitor);
+			}  */
+			
+			IFolder base = project.getFolder(prefsBase);
+			for (String p : prefs.getList(AP.IMPORT_PATHS)) {
+				IFolder folder = project.getFolder(p);
+				if (!folder.exists()) {
+					//folder.createLink(prefsBase.append(p).makeAbsolute(), IResource.NONE, nullProgressMonitor);
+					IPath newPath = prefsBase.append(p).makeAbsolute();
+					
+
+					
+//					System.out.println(p1);
+//					
+//					
+//					System.out.println("++++++++++++++++++");
+//					System.out.println("Import path: " + p);
+//					System.out.println("Folder path:" + folder.getFullPath());
+//					System.out.println("Base: " + prefsBase);
+//					System.out.println("NewPath: " + newPath);
+//					//base.createLink(newPath, IResource.FOLDER, nullProgressMonitor);
+//					System.out.println(folder.getLocationURI());
+					//IFolder f2 = project.getFolder(folder.getLocationURI());
+					folder.createLink(newPath, IResource.NONE, nullProgressMonitor);
+					//folder.
+//					try {
+//					
+//					}
+//					catch (ResourceException e) {
+//						
+//					}
+					//prefsFolder.createLink(newPath, IResource.NONE, nullProgressMonitor);
+				}
 			}
+			
+			// Create links for token files
+			for (String p : prefs.getList(AP.TOKEN_PATH)) {
+				IFile tokenFile = project.getFile(p);
+				if (!tokenFile.exists()) {
+					tokenFile.createLink(prefsBase.append(p), IResource.NONE, nullProgressMonitor);
+				}
+			}
+			for (String p : prefs.getList(AP.ONTOLOGY_PATHS)) {
+				IFile ontFile = project.getFile(p);
+				if (!ontFile.exists()) {
+					ontFile.createLink(prefsBase.append(p), IResource.NONE, nullProgressMonitor);
+				}
+			}
+			
 		}
 		catch (CoreException e) {
 			Log.logError(e, "Problem setting up project");

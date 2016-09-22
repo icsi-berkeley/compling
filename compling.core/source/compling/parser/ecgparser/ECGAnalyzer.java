@@ -3,15 +3,24 @@ package compling.parser.ecgparser;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.StringTokenizer;
 
 import compling.grammar.ecg.ECGGrammarUtilities;
 import compling.grammar.ecg.Grammar;
+import compling.grammar.ecg.Grammar.Construction;
+import compling.grammar.ecg.GrammarWrapper;
 import compling.grammar.unificationgrammar.FeatureStructureUtilities.DefaultStructureFormatter;
+import compling.grammar.unificationgrammar.TypeSystem;
+import compling.grammar.unificationgrammar.TypeSystemException;
+import compling.grammar.unificationgrammar.UnificationGrammar.Constraint;
 import compling.gui.AnalyzerPrefs;
 import compling.gui.AnalyzerPrefs.AP;
 import compling.parser.ParserException;
+import compling.parser.UnknownWordException;
+import compling.parser.ecgparser.ECGTokenReader.ECGToken;
 import compling.parser.ecgparser.LeftCornerParserTablesCxn.AnalysisFactory;
 import compling.parser.ecgparser.LeftCornerParserTablesCxn.AnalysisInContextFactory;
 import compling.parser.ecgparser.LeftCornerParserTablesCxn.BasicAnalysisFactory;
@@ -22,6 +31,7 @@ import compling.parser.ecgparser.LeftCornerParserTablesCxn.ParamFileConstituentE
 import compling.parser.ecgparser.LeftCornerParserTablesCxn.ParamFileConstituentExpansionCostTableCFG;
 import compling.parser.ecgparser.LeftCornerParserTablesCxn.ParamFileConstituentExpansionCostTableFromCounts;
 import compling.parser.ecgparser.LeftCornerParserTablesCxn.UnifyTable;
+import compling.parser.ecgparser.ECGMorph;
 import compling.parser.ecgparser.SemSpecScorer.BasicScorer;
 import compling.parser.ecgparser.SemSpecScorer.BasicTableScorer;
 import compling.parser.ecgparser.SemSpecScorer.ParamFileScorerFromCounts;
@@ -34,20 +44,35 @@ import compling.utterance.Utterance;
 import compling.utterance.Word;
 
 public class ECGAnalyzer implements compling.parser.Parser<Analysis> {
+
 	private LeftCornerParser<Analysis> parser;
 
 	private int beamSize;
+	private int beamWidth;
 	private int numAnalysesReturned;
 	private double multiRootPenalty;
 
 	private boolean robust;
 	private boolean debug;
 	private boolean analyzeInContext;
+	
+	// if this is true, use a built-in method for incrementing beam size
+	// according to length of input, etc.
+	private boolean variableBeam;
 
 	private String paramsType;
 	private boolean useBackoff;
+	
+	private AnalyzerPrefs preferences;
+	
+	private MappingReader mappingReader;
+	
 
 	private LCPGrammarWrapper grammar;
+	
+	private ECGMorph ecgmorph;
+	
+	private ECGTokenReader tokenReader;
 
 	private ConstituentExpansionCostTable cect = null;
 
@@ -55,16 +80,37 @@ public class ECGAnalyzer implements compling.parser.Parser<Analysis> {
 		this(grammar, grammar.getPrefs() != null && grammar.getPrefs() instanceof AnalyzerPrefs ? (AnalyzerPrefs) grammar
 				.getPrefs() : new AnalyzerPrefs());
 	}
+	
+	public AnalyzerPrefs getPrefs() {
+		return preferences;
+	}
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public ECGAnalyzer(Grammar ecgGrammar, AnalyzerPrefs prefs) throws IOException {
+		
+		
+		
+		
+		preferences = prefs;
+		
+		//ecgGrammar.buildTokenAndMorpher();
+
 		grammar = new LCPGrammarWrapper(ecgGrammar);
+		
+		
+
+		
+		mappingReader = new MappingReader(grammar);
+		//tokenReader = new ECGTokenReader(grammar);
+		//ecgmorph = new ECGMorph(grammar, tokenReader);
 
 		if (prefs == null) {
 			throw new ParserException("AnalyzerPrefs object expected");
 		}
 
 		beamSize = prefs.getSetting(AP.BEAM_SIZE) == null ? 3 : Integer.valueOf(prefs.getSetting(AP.BEAM_SIZE));
+		
+		beamWidth = prefs.getSetting(AP.BEAM_WIDTH) == null ? 3 : Integer.valueOf(prefs.getSetting(AP.BEAM_WIDTH));
 
 		numAnalysesReturned = prefs.getSetting(AP.NUM_ANALYSES_RETURNED) == null ? 3 : Integer.valueOf(prefs
 				.getSetting(AP.NUM_ANALYSES_RETURNED));
@@ -74,6 +120,9 @@ public class ECGAnalyzer implements compling.parser.Parser<Analysis> {
 
 		robust = prefs.getSetting(AP.ROBUST) == null ? false : Boolean.valueOf(prefs.getSetting(AP.ROBUST));
 
+		variableBeam = prefs.getSetting(AP.VARIABLE_BEAM) == null ? false : Boolean.valueOf(prefs.getSetting(AP.VARIABLE_BEAM));
+
+		
 		debug = prefs.getSetting(AP.DEBUG) == null ? false : Boolean.valueOf(prefs.getSetting(AP.DEBUG));
 
 		analyzeInContext = prefs.getSetting(AP.ANALYZE_IN_CONTEXT) == null ? false : Boolean.valueOf(prefs
@@ -129,9 +178,7 @@ public class ECGAnalyzer implements compling.parser.Parser<Analysis> {
 
 			List<File> semParamFiles = FileUtils.getFilesUnder(prefs.getBaseDirectory(),
 					prefs.getList(AP.GRAMMAR_PARAMS_PATHS), new ExtensionFileFilter(grammarParamsSemExt));
-
 			if (!semParamFiles.isEmpty()) {
-				// System.out.println(semParamFiles);
 				BasicTableScorer scorer = new BasicTableScorer(semParamFiles.get(0).getAbsoluteFile().getAbsolutePath(),
 						grammar.getSchemaTypeSystem(), ecgGrammar.getOntologyTypeSystem());
 				// ParamFileScorerFromCounts scorer = new ParamFileScorerFromCounts(ecgGrammar,
@@ -139,16 +186,81 @@ public class ECGAnalyzer implements compling.parser.Parser<Analysis> {
 
 				Analysis.setSemSpecScorer(scorer);
 			}
-
+			
 			parser = new LeftCornerParser<Analysis>(ecgGrammar, factory, cect);
 		}
 		else {
 			parser = new LeftCornerParser<Analysis>(ecgGrammar, factory);
 		}
 
-		parser.setParameters(robust, debug, beamSize, numAnalysesReturned, multiRootPenalty);
+		parser.setParameters(robust, debug, beamSize, numAnalysesReturned, multiRootPenalty, beamWidth);
+		getLexicon();
+		
+
+		
+
+
 
 //    needs to be more code here to further process the grammar prefs
+	}
+	
+	public boolean isDebug() {
+		return debug;
+	}
+	
+	public HashMap<String, String> getMappings() {
+		return mappingReader.getMappings();
+	}
+	
+	public ArrayList<String> getLexicon() {
+		TypeSystem ts = grammar.getGrammar().getCxnTypeSystem();
+		ArrayList<String> lexicon = new ArrayList<String>();
+		
+		for (String t : this.parser.getMorphInflections().keySet()) {
+			lexicon.add(t);
+		}
+		Map<String, ArrayList<ECGToken>> tokens = this.parser.getTokens();
+		for (String t : tokens.keySet()) {
+			lexicon.add(t);
+		}
+		for (Construction cxn : grammar.getAllConcreteLexicalConstructions()) {
+			try {
+				if (!ts.subtype(ts.getInternedString(cxn.getName()), ts.getInternedString("GeneralTypeCxn"))) {
+					for (Constraint c : cxn.getFormBlock().getConstraints()) {
+						//System.out.println(c.getArguments().get(index));
+						if (c.getArguments().get(0).toString().equals("self.f.orth")) {
+							lexicon.add(c.getValue().replace("\"", ""));
+						}
+					}
+				}
+			} catch (TypeSystemException e) {
+				// TODO Bad thing
+				e.printStackTrace();
+			}
+		}
+		
+		//return this.parser.getTokens();
+		return lexicon;
+	}
+	
+	public ArrayList<String> getUtterances() {
+		UtteranceGenerator generator = new UtteranceGenerator(grammar);
+		return generator.generateUtterances("Utterance");
+	}
+	
+	public ArrayList<String> getUtterances(String type) {
+		UtteranceGenerator generator = new UtteranceGenerator(grammar);
+		return generator.generateUtterances(type);
+	}
+	
+	
+	/** Reads token file into Parser again. Needs to be done when you want new tokens in lexicon. */
+	public void reloadTokens() {
+		try {
+			this.parser.reloadTokens();
+		} catch(IOException problem) {
+			System.out.println("Error reloading tokens.");
+		}
 	}
 
 	public ECGAnalyzer(String prefsFileName) throws Exception {
@@ -156,7 +268,7 @@ public class ECGAnalyzer implements compling.parser.Parser<Analysis> {
 	}
 
 	@SuppressWarnings({ "rawtypes", "unchecked" })
-	public void loadNewGrammar(Grammar ecgGrammar, StringBuffer grammarParamsCxn, StringBuffer grammarParamsSem) {
+	public void loadNewGrammar(Grammar ecgGrammar, StringBuffer grammarParamsCxn, StringBuffer grammarParamsSem) throws IOException {
 		grammar = new LCPGrammarWrapper(ecgGrammar);
 		AnalysisFactory factory;
 		if (analyzeInContext) {
@@ -195,14 +307,18 @@ public class ECGAnalyzer implements compling.parser.Parser<Analysis> {
 		}
 
 		parser = new LeftCornerParser<Analysis>(ecgGrammar, factory, cect);
-		parser.setParameters(robust, debug, beamSize, numAnalysesReturned, multiRootPenalty);
+		parser.setParameters(robust, debug, beamSize, numAnalysesReturned, multiRootPenalty, beamSize);
 	}
 
 	public Grammar getGrammar() {
 		return grammar.grammar;
 	}
-
-	public PriorityQueue<Analysis> getBestParses(Utterance<Word, String> utterance) {
+	
+	public GrammarWrapper getGrammarWrapper() {
+		return grammar;
+	}
+	
+	private PriorityQueue<Analysis> getParsesForUtterance(Utterance<Word, String> utterance) {
 		PriorityQueue<List<Analysis>> pqa = parser.getBestPartialParses(utterance);
 		PriorityQueue<Analysis> parses = new PriorityQueue<Analysis>();
 		while (pqa.size() > 0) {
@@ -215,6 +331,40 @@ public class ECGAnalyzer implements compling.parser.Parser<Analysis> {
 			parses.add(a, priority);
 		}
 		return parses;
+	}
+
+	// will probably separate this method into non-variable and variable versions eventually
+	public PriorityQueue<Analysis> getBestParses(Utterance<Word, String> utterance) {
+	
+		
+		if (this.variableBeam) {
+			//System.out.println("Utterance length is " + utterance.size());
+			int maxBeam = utterance.size() * 10; // make this a function of utterance length
+			// maybe utterance.size() * 10?
+			int index = 5;
+			while (index <= maxBeam) {
+				//System.out.println(index);
+
+				try {
+					parser.setBeamWidth(index);
+					PriorityQueue<Analysis> parses = getParsesForUtterance(utterance);
+					return parses;
+				} catch (ParserException e) {
+					if (e.isUnknown()) {
+						//System.out.println("Beam size on");
+						throw new ParserException(e.getMessage());
+					}
+					index = index * 2;	
+				}
+			}
+			throw new ParserException("No complete analysis for: '" + utterance.toString() + "'.");
+		} else {
+			return getParsesForUtterance(utterance);
+		}
+
+		
+		 
+		
 	}
 
 	public Analysis getBestParse(Utterance<Word, String> utterance) {
@@ -268,6 +418,16 @@ public class ECGAnalyzer implements compling.parser.Parser<Analysis> {
 	public static void main(String[] args) throws Exception {
 		System.out.print("Initialiazing analyzer ...");
 		ECGAnalyzer analyzer = new ECGAnalyzer(args[0]);
+		System.out.println(" done.");
+		
+		
+		
+		System.out.print("Reading tokens ...");
+		ECGTokenReader tokens = new ECGTokenReader(analyzer.getGrammar());
+		System.out.println(" done.");
+		
+		System.out.print("Reading Morphology Dictionary ...");
+		ECGMorph morph = new ECGMorph(analyzer.getGrammar(), tokens);
 		System.out.println(" done.");
 
 		TextFileLineIterator tfli = new TextFileLineIterator(args[1]);

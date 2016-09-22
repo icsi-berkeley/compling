@@ -59,6 +59,18 @@ public class ECGConstants {
 	 * "<--"
 	 */
 	public static final String ASSIGN = "<--";
+	
+	/**
+	 * 	 * The constant for assignment that should be passed into the operator role of the constraint constructor. ASSIGN =
+	 * "<--"
+	 */
+	public static final String NEGATE = "#";
+	
+	/**
+	 * 	 * The constant for assignment that should be passed into the operator role of the constraint.
+	 * This imposes a unidirectional assignment.
+	 */
+	public static final String UNIDIRECTIONAL_ASSIGN = "<=";
 
 /**
     * The constant for form constraint 'before' that should be passed into the
@@ -175,5 +187,9 @@ public class ECGConstants {
 
 	/** This is the current home for the default probability that an optional constituent appears */
 	public static final double DEFAULTOPTIONALPROBABILITY = .5;
+	
+	/** Package / import constants. (seantrott). */
+	public static final String PACKAGE = "PACKAGE";
+	public static final String IMPORT = "IMPORT";
 
 }

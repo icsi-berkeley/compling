@@ -472,6 +472,7 @@ public class LeftCornerParserTablesCxn {
 			factory.staticSetUp();
 			for (Construction cxn : canonicalInstances.keySet()) {
 				factory.update(canonicalInstances.get(cxn));
+
 			}
 		}
 
@@ -480,6 +481,14 @@ public class LeftCornerParserTablesCxn {
 			a.setStartIndex(startIndex);
 			a.getPossibleSemSpecs().setID();
 			return a;
+		}
+		
+		// adds a new Construction to canonical Instances HashMap. @seantrott. 
+		public void put(Construction cxn) {
+			T a = factory.get(cxn);
+			canonicalInstances.put(cxn, a); //   factory.get(cxn));
+			//System.out.println(factory.get(cxn));
+			
 		}
 
 		@SuppressWarnings("unchecked")
@@ -510,7 +519,7 @@ public class LeftCornerParserTablesCxn {
 					String special = role.getSpecialField();
 					if (special.indexOf("[") >= 0) {
 						String[] probs = special.substring(special.indexOf("[") + 1, special.indexOf("]")).split("\\s");
-
+						
 						// for (int i = 0; i < probs.length; i++){
 						// System.out.print("probs |");
 						// System.out.print(probs[i]);
@@ -551,6 +560,7 @@ public class LeftCornerParserTablesCxn {
 					// System.out.print("\t"+role.getName());
 					String special = role.getSpecialField();
 					if (special.indexOf("[") >= 0) {
+						//System.out.println(special);
 						String probs[] = special.substring(special.indexOf("[") + 1, special.indexOf("]")).split(" |,");
 						double probability = Double.parseDouble(probs[1]);
 						tablePutter(localCostTable, role, probability);

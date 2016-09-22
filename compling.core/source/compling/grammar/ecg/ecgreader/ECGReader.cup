@@ -16,6 +16,7 @@ import compling.grammar.ecg.Grammar.Situation;
 import compling.grammar.unificationgrammar.UnificationGrammar.Constraint;
 import compling.grammar.unificationgrammar.UnificationGrammar.Role;
 import compling.grammar.unificationgrammar.UnificationGrammar.TypeConstraint;
+import java.util.ArrayList;
 
 parser code {:
 
@@ -53,9 +54,11 @@ parser code {:
 :}
 
 /* Terminals (tokens returned by the scanner). */
-terminal  CONSTRUCTION, SUBCASE, CONSTRUCTIONAL, SCHEMA, ABSTRACT;
+terminal  CONSTRUCTION, SUBCASE, CONSTRUCTIONAL, SCHEMA, ABSTRACT, PACKAGE, IMPORT;
 terminal  FORM, MEANING, BEFORE, MEETS, COLON, COMMA, OPENBRACKET, CLOSEBRACKET, OPTIONAL, EXTRAPOSED;
 terminal  ASSIGN, IDENTIFY, EVOKES, AS, OF, ROLES;
+terminal  NEGATE;
+terminal UNIDIRECTIONAL_ASSIGN;
 terminal  CONSTITUENTS, CONSTRAINTS, FEATURE, SEMANTIC, IGNORE;
 
 terminal  MAP, SITUATION;
@@ -86,9 +89,17 @@ non terminal String map_kinds;
 non terminal Situation situation;
 non terminal String situation_kinds;
 
+/* New additions (seantrott) */
+non terminal String package_kinds;
+non terminal String current_package;
+non terminal String import_kind;
+non terminal String current_import;
+
 ecg_list ::=
   ecg_list:el schema:s {: 
-    if (s != null){el.addSchema(s);} 
+    if (s != null) {
+    	el.addSchema(s);
+    } 
     RESULT = el;
   :}
   | ecg_list:el cxn:c {: 
@@ -108,6 +119,20 @@ ecg_list ::=
       el.addSituation(s); 
     } 
     RESULT = el; 
+  :} 
+  | ecg_list: el current_import:i {:
+    if (i != null) {
+      el.addImport(i);
+      el.addPackageRelation(i);
+    }
+    RESULT = el;
+  :}
+  | ecg_list: el current_package:c {:
+    if (c != null) {
+      el.setPackage(c);
+      el.addPackage(c);
+    }
+    RESULT = el;
   :}
   | /* epsilon */ {: 
     RESULT = parser.grammar; 
@@ -137,7 +162,9 @@ cxn ::=
     }
     
     RESULT = parser.grammar.new Construction(n, k, p, f, m, c); 
+    //parser.grammar.getConstruction(n).setPackage(parser.grammar.getPackage()); 
     RESULT.setLocation(new Location(n, parser.file, nleft, nright));
+    RESULT.setPackage(parser.grammar.getPackage()); // (seantrott)
   :}
   | cxn_kind IDENTIFIER:n error {: 
     parser.structural_error("Construction "+n+" has an error"); 
@@ -213,7 +240,8 @@ schema ::=
     block.setEvokedElements(e);
     block.setElements(r);
     block.setConstraints(c);
-    RESULT = parser.grammar.new Schema(n, k, p, block); 
+    RESULT = parser.grammar.new Schema(n, k, p, block);
+    RESULT.setPackage(parser.grammar.getPackage()); // (seantrott)
     RESULT.setLocation(new Location(n, parser.file, nleft, nright));
   :}
   | schema_kinds IDENTIFIER:n error {: 
@@ -221,6 +249,33 @@ schema ::=
      RESULT = null; 
   :}
 ;
+
+/* PACKAGE (seantrott) */
+package_kinds ::=
+   PACKAGE {:
+     RESULT = ECGConstants.PACKAGE;
+   :}
+   ;
+
+current_package ::=
+   package_kinds: k IDENTIFIER: n {:
+     RESULT = parser.grammar.setPackage(n);
+   :}
+   ;
+
+
+/* IMPORT (seantrott) */
+import_kind ::= 
+    IMPORT {:
+      RESULT = ECGConstants.IMPORT;
+    :}
+    ;
+
+current_import ::=
+    import_kind: k IDENTIFIER: n {:
+      RESULT = parser.grammar.addImport(n);
+    :}
+    ;
 
 /* MAP */
 
@@ -469,6 +524,12 @@ constraint ::=
       RESULT = new Constraint(ECGConstants.ASSIGN, new ECGSlotChain(arg1), arg2);
     else
       RESULT = new Constraint(ECGConstants.ASSIGN, new ECGSlotChain(arg1), new ECGSlotChain(arg2)); 
+  :}
+  | slot_chain:arg1 NEGATE:op ident_or_str:arg2 {:
+  	RESULT = new Constraint(ECGConstants.NEGATE, new ECGSlotChain(arg1), arg2);
+  :}
+  | slot_chain:arg1 UNIDIRECTIONAL_ASSIGN:op ident_or_str:arg2 {:
+  	RESULT = new Constraint(ECGConstants.UNIDIRECTIONAL_ASSIGN, new ECGSlotChain(arg1), arg2);
   :}
   ;
 

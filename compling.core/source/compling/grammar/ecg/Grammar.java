@@ -30,17 +30,24 @@ import compling.grammar.ecg.ECGGrammarUtilities.SimpleGrammarPrinter;
 import compling.grammar.ecg.ecgreader.ILocatable;
 import compling.grammar.ecg.ecgreader.Location;
 import compling.grammar.unificationgrammar.TypeSystem;
+import compling.grammar.unificationgrammar.TypeSystemException;
 import compling.grammar.unificationgrammar.TypeSystemNode;
 import compling.grammar.unificationgrammar.UnificationGrammar.Constraint;
 import compling.grammar.unificationgrammar.UnificationGrammar.Role;
 import compling.grammar.unificationgrammar.UnificationGrammar.SlotChain;
 import compling.grammar.unificationgrammar.UnificationGrammar.TypeConstraint;
+import compling.parser.ParserException;
+import compling.parser.ecgparser.ECGMorph;
+import compling.parser.ecgparser.ECGTokenReader;
+import compling.util.PackageHandler;
 
-public class Grammar {
+public class Grammar extends PackageHandler {
 	private HashMap<String, Construction> cxns = new LinkedHashMap<String, Construction>();
 	private HashMap<String, Schema> schemas = new LinkedHashMap<String, Schema>();
 	private HashMap<String, MapPrimitive> maps = new LinkedHashMap<String, MapPrimitive>();
 	private HashMap<String, Situation> situations = new LinkedHashMap<String, Situation>();
+	
+	//private TypeSystem<Lexeme> lexemeTypeSy
 	
 	private TypeSystem<Construction> cxnTypeSystem = new TypeSystem<Construction>(ECGConstants.CONSTRUCTION);
 	private TypeSystem<Schema> schemaTypeSystem = new TypeSystem<Schema>(ECGConstants.SCHEMA);
@@ -52,7 +59,36 @@ public class Grammar {
 	
 	private static ECGGrammarFormatter formatter = new SimpleGrammarPrinter();
 	private ContextModel contextModel = null;
+	
+	
+	private ECGTokenReader tokenReader;
+	private ECGMorph ecgMorpher;
+	
+	public void buildTokenAndMorpher() {
+		readTokens();
+		readMorpher();
+	}
+	
+	public TypeSystem<Construction> getConstructionTypeSystem() {
+		return cxnTypeSystem;
+	}
+	
+	public void readMorpher() {
+		ecgMorpher = new ECGMorph(this, tokenReader);
+	}
+	
+	public ECGMorph getMorpher() {
+		return ecgMorpher;
+	}
 
+	public void readTokens() {
+		tokenReader = new ECGTokenReader(this);
+	}
+		
+	public ECGTokenReader getTokenReader() {
+		return tokenReader;
+	}
+	
 	public void setContextModel(ContextModel cm) {
 		this.contextModel = cm;
 	}
@@ -90,6 +126,15 @@ public class Grammar {
 		}
 	}
 
+	//@seantrott
+	public Construction copyConstruction(Construction cxn) {
+		Construction returned = new Construction(cxn.getName(), cxn.getKind(), cxn.getParents(),
+        		  								cxn.getFormBlock(), cxn.getMeaningBlock(), cxn.getConstructionalBlock());
+		return returned;
+		
+	}
+	
+	
 	public static void setFormatter(ECGGrammarFormatter f) {
 		formatter = f;
 	}
@@ -115,6 +160,10 @@ public class Grammar {
 	public Map<String, Construction> getAllConstructionsByName() {
 		update();
 		return cxns;
+	}
+	
+	public Collection<Construction> getCxnsNoUpdate() {
+		return cxns.values();
 	}
 
 	public Collection<Construction> getAllConstructions() {
@@ -164,6 +213,11 @@ public class Grammar {
 	public Situation getSituation(String name) {
 		update();
 		return situations.get(name);
+	}
+	
+	/** Added @seantrott for testing - building incremental grammars, don't want to update. */
+	public Collection<Schema> getSchemasNoUpdate() {
+		return schemas.values();
 	}
 
 	public Collection<Schema> getAllSchemas() {
@@ -242,6 +296,27 @@ public class Grammar {
 	}
 
 	public abstract class Primitive implements TypeSystemNode, ILocatable {
+		
+		/* New field for package name. */
+		protected String pkg;
+		
+		/** Returns the package type for construction. Constructions are defined as part of a package.
+		 * (Default is "global" in grammar). *
+		 * @return package name that construction is a part of. ("Global" is default").
+		 */
+		public String getPackage() {
+			return pkg;
+		}
+		
+		/** Sets package name.
+		 * 
+		 * @param 
+		 * @return Returns the string representation of the package name.
+		 */
+		public String setPackage(String packageName) {
+			pkg = packageName;
+			return pkg;
+		}
 
 		protected String name;
 		protected Set<String> parents;
@@ -321,6 +396,15 @@ public class Grammar {
 		public Block(String kind, String type) {
 			this.kind = kind;
 			this.type = type;
+		}
+		
+		
+		public String toString() {
+			StringBuffer formatted = new StringBuffer();
+			for (Constraint c : constraints) {
+				formatted.append(c.toString() + "\n");
+			}
+			return formatted.toString();
 		}
 
 		public Block clone() {
@@ -443,6 +527,8 @@ public class Grammar {
 		private Role extraPosedRole = null;
 		private Set<Role> allRoles = null;
 
+		
+		
 		public Construction(String name, String kind, Set<String> parents, Block formBlock, Block meaningBlock,
 				Block constructionalBlock) {
 			this.name = name;
@@ -452,6 +538,7 @@ public class Grammar {
 			this.constructionalBlock = constructionalBlock;
 			this.kind = kind;
 		}
+		
 
 		public void setMeaningBlock(Block meaningBlock) {
 			this.meaningBlock = meaningBlock;
@@ -627,6 +714,10 @@ public class Grammar {
 
 		public Block getContents() {
 			return contents;
+		}
+		
+		public String getKind() {
+			return this.kind;
 		}
 
 		public Set<Role> getAllRoles() {

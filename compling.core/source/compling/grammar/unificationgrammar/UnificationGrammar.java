@@ -5,11 +5,21 @@ import java.util.List;
 import java.util.StringTokenizer;
 
 import compling.grammar.GrammarException;
+import compling.grammar.unificationgrammar.UnificationGrammar.SlotChain;
 import compling.util.Interner;
 
 public class UnificationGrammar {
+	
+	
+	//used as testing method
+	public static Constraint generateConstraint(String value) {
+		Constraint c = new Constraint("<--", new SlotChain(""), value); 
+		return c;
+	}
 
 	public static class Role implements Cloneable {
+		
+		private boolean local=true;
 
 		private String name;
 		private TypeConstraint typeConstraint = null;
@@ -22,6 +32,14 @@ public class UnificationGrammar {
 		public Role(String name) {
 			this.name = interner.intern(name);
 			cachedHashCode = this.name.hashCode();
+		}
+		
+		public boolean isLocal() {
+			return local;
+		}
+		
+		public void setLocal(boolean value) {
+			local = value;
 		}
 
 		public void setName(String name) {
@@ -96,10 +114,28 @@ public class UnificationGrammar {
 
 		public String type;
 		public TypeSystem<? extends TypeSystemNode> typeSystem;
+		public boolean negated = false;
+		public boolean unidirectional = false;
 
 		public TypeConstraint(String type, TypeSystem<? extends TypeSystemNode> typeSystem) {
 			this.type = type;
 			this.typeSystem = typeSystem;
+		}
+		
+		public void setNegated(boolean negate) {
+			negated = negate;
+		}
+		
+		public void setUnidirectional(boolean uni) {
+			unidirectional = uni;
+		}
+		
+		public boolean unidirectional() {
+			return unidirectional;
+		}
+		
+		public boolean negated() {
+			return negated;
 		}
 
 		public void setTypeSystem(TypeSystem<? extends TypeSystemNode> typeSystem) {
@@ -117,6 +153,10 @@ public class UnificationGrammar {
 
 		public String getType() {
 			return type;
+		}
+		
+		public void setType(String inputType) {
+			this.type = inputType;
 		}
 
 		public TypeSystem<?> getTypeSystem() {
@@ -228,7 +268,9 @@ public class UnificationGrammar {
 		}
 	}
 
-	public static class Constraint {
+	public static class Constraint implements Comparable {
+		
+		private boolean local = true;
 
 		private String operator;
 		private List<SlotChain> arguments;
@@ -240,6 +282,15 @@ public class UnificationGrammar {
 			this.operator = operator;
 			this.arguments = arguments;
 		}
+		
+		public boolean isLocal() {
+			return local;
+		}
+		
+		public void setLocal(boolean value) {
+			local = value;
+		}
+	
 
 		public Constraint(String operator, SlotChain arg1, SlotChain arg2) {
 			arguments = new ArrayList<SlotChain>();
@@ -261,6 +312,16 @@ public class UnificationGrammar {
 			arguments.add(arg1);
 			this.operator = operator;
 			this.value = value;
+		}
+
+		public Constraint(String operator, String source, String value,
+				boolean overridden, List<SlotChain> arguments, boolean local) {
+			this.operator = operator;
+			this.source = source;
+			this.value = value;
+			this.overridden = overridden;
+			this.arguments = arguments;
+			this.local = local;
 		}
 
 		public void setOverridden(boolean val) {
@@ -301,6 +362,7 @@ public class UnificationGrammar {
 
 		public boolean isAssign() {
 			return value != null;
+			// and operator != "#"?
 		}
 
 		public boolean equals(Object o) {
@@ -359,6 +421,15 @@ public class UnificationGrammar {
 				}
 			}
 			return sb.toString();
+		}
+
+		@Override
+		public int compareTo(Object arg0) {
+			if (this.equals(arg0)) {
+				return 0;
+			}
+			Constraint that = (Constraint) arg0;
+			return this.getArguments().get(0).toString().compareTo(that.getArguments().get(0).toString());
 		}
 	}
 

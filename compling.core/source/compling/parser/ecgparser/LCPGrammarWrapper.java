@@ -25,6 +25,9 @@ public class LCPGrammarWrapper implements GrammarWrapper {
 	Grammar grammar;
 	private HashMap<String, List<String>> subtypeList = new HashMap<String, List<String>>();
 	private HashMap<String, List<Construction>> lexemeToLexicalConstructions = new HashMap<String, List<Construction>>();
+	// for lemmas and constructions
+	private HashMap<String, List<Construction>> lemmaToLexicalConstructions = new HashMap<String, List<Construction>>();
+
 	Construction morph;
 	Construction word;
 
@@ -50,10 +53,24 @@ public class LCPGrammarWrapper implements GrammarWrapper {
 				if (lexemeToLexicalConstructions.get(ECGGrammarUtilities.getLexemeFromLexicalConstruction(parent)) == null) {
 					lexemeToLexicalConstructions.put(ECGGrammarUtilities.getLexemeFromLexicalConstruction(parent),
 							new ArrayList<Construction>());
-				}
+				} 
+				// @ author seantrott
+				// instantiate new entry for lemma if it's not already in hashmap
+//				if (lemmaToLexicalConstructions.get(ECGGrammarUtilities.getLemmaFromLexicalConstruction(parent)) == null) {     // so far just putting in lexeme hashmap
+//					lemmaToLexicalConstructions.put(ECGGrammarUtilities.getLemmaFromLexicalConstruction(parent), new ArrayList<Construction>());
+//				}
+
+				// add parent to lemma hashmap
+				//lemmaToLexicalConstructions.get(ECGGrammarUtilities.getLemmaFromLexicalConstruction(parent)).add(parent);
+
 				lexemeToLexicalConstructions.get(ECGGrammarUtilities.getLexemeFromLexicalConstruction(parent)).add(parent);
 			}
 		}
+	}
+	
+	public Grammar getGrammar() {
+		return grammar;
+		
 	}
 
 	/** Returns the concrete rules that are subtypes of construction */
@@ -114,6 +131,10 @@ public class LCPGrammarWrapper implements GrammarWrapper {
 	public boolean hasLexicalConstruction(String lexeme) {
 		return lexemeToLexicalConstructions.containsKey(lexeme);
 	}
+	
+	public boolean hasLemmaConstruction(String lemma) {
+		return lemmaToLexicalConstructions.containsKey(lemma);
+	}
 
 	public List<Construction> getLexicalConstruction(String lexeme) {
 		List<Construction> lex = lexemeToLexicalConstructions.get(lexeme);
@@ -123,6 +144,16 @@ public class LCPGrammarWrapper implements GrammarWrapper {
 		}
 		return lex;
 	}
+	
+	public List<Construction> getLemmaConstruction(String lemma) {
+		List<Construction> lem = lemmaToLexicalConstructions.get(lemma);
+		if (lem == null) {
+			// System.out.println(lexemeToLexicalConstruction.keySet());
+			throw new GrammarException("undefined lexeme: " + lemma + " in Grammar.getLexicalConstruction");
+		}
+		return lem;
+	}
+	
 
 	public Set<Construction> getAllConcretePhrasalConstructions() {
 		Set<Construction> cxns = new LinkedHashSet<Construction>();

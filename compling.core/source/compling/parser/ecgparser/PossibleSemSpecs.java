@@ -26,6 +26,7 @@ import compling.parser.ecgparser.LeftCornerParserTablesCxn.DumbConstituentExpans
 import compling.parser.ecgparser.LeftCornerParserTablesCxn.UnifyTable;
 import compling.parser.ecgparser.LeftCornerParserTablesSem.SlotChainTables;
 import compling.parser.ecgparser.LeftCornerParserTablesSem.SlotConnectionTracker;
+import compling.parser.ecgparser.PossibleSemSpecs.PartialSemSpec.Slot;
 import compling.util.IdentityHashSet;
 import compling.util.Pair;
 import compling.util.math.SloppyMath;
@@ -379,7 +380,7 @@ public class PossibleSemSpecs implements Cloneable {
               badUni = true;
               break;
             }
-            // System.out.println("in incorp child "+ancChain.toString()+"  "+descChain.toString()+" pid:"+id+" cid:"+child.id);
+             //System.out.println("in incorp child "+ancChain.toString()+"  "+descChain.toString()+" pid:"+id+" cid:"+child.id);
             remainingChildSlots.remove(descChain);
           }
           // System.out.println(remainingChildSlots);
@@ -448,13 +449,14 @@ public class PossibleSemSpecs implements Cloneable {
               System.out.println("ancChain: " + ancChain.toString() + "\n" + ba.toString() + "\n"
                       + ancestor.semSpecList.get(pc).toString());
             }
-            try {
+           try {
               if (!newChild.slots.get(descChain).incorporateInfo(ancestorSlots.get(ancChain))) {
                 badUni = true;
                 break;
               }
-            }
+           }
             catch (NullPointerException e) {
+            	//e.printStackTrace();
               System.out.printf("descChain: %s, ba: %s, slots: %s\n", descChain, ba, newChild.slots);
 //              badUni = true;
 //              break;

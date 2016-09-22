@@ -9,7 +9,9 @@ package compling.gui.util;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
 
 import compling.grammar.GrammarException;
 import compling.grammar.ecg.Grammar;
@@ -33,6 +35,23 @@ import compling.utterance.Sentence;
  * @author lucag
  */
 public final class Utils {
+	
+	private static boolean DEBUG = false;
+	
+	private static HashMap<String, String> parseCache = new HashMap<String, String>();
+	private static HashMap<String, Collection<IParse>> alterParseCache = new HashMap<String, Collection<IParse>>();
+	
+	private void setDebug(boolean value) {
+		DEBUG = value;
+	}
+
+	
+	public static void flushCaches() {
+		//String[] keySet = parseCache.keySet().toArray(new String[parseCache.keySet().size()]);
+		parseCache = new HashMap<String, String>();
+		alterParseCache = new HashMap<String, Collection<IParse>>();
+		
+	}
 
 	public static class Parse implements IParse {
 		public static final IParse NO_PARSE = new Parse((Analysis) null, 0);
@@ -125,11 +144,15 @@ public final class Utils {
 
 	// TODO: make this synchronized?
 	public static Collection<IParse> getParses(String text, ECGAnalyzer analyzer) {
+		if (alterParseCache.containsKey(text)) {
+			debugPrint("Retrieving from cache...");
+			return alterParseCache.get(text);
+		} 
 		assert text != null;
-		
 		Collection<IParse> parses = new ArrayList<IParse>();
 		Sentence sentence = new Sentence(Arrays.split(text));
 		if (analyzer.robust()) {
+
 			PriorityQueue<List<Analysis>> pp = analyzer.getBestPartialParses(sentence);
 			while (pp.size() > 0) {
 				double priority = pp.getPriority();
@@ -145,6 +168,8 @@ public final class Utils {
 				parses.add(new Parse(analysis, priority));
 			}
 		}
+		debugPrint("Inserting into cache...");
+		alterParseCache.put(text, parses);
 		return parses;
 	}
 
@@ -170,6 +195,14 @@ public final class Utils {
 //		}
 //		return pairs;
 //	}
+
+	private static void debugPrint(String string) {
+		// TODO Auto-generated method stub
+		if (DEBUG) {
+			System.out.println(string);
+		}
+		
+	}
 
 	public static Collection<Pair<Analysis, Double>> getFlattened(Collection<IParse> parses) {
 		Collection<Pair<Analysis, Double>> pairs = new ArrayList<Pair<Analysis, Double>>();
@@ -228,6 +261,10 @@ public final class Utils {
 	}
 
 	public static String parse(String sentence, ECGAnalyzer analyzer) {
+		if (parseCache.containsKey(sentence)) {
+			debugPrint("Retrieving from cache...");
+			return parseCache.get(sentence);
+		} 
 		List<String> words = Arrays.split(sentence);
 		StringBuilder result = new StringBuilder();
 		Analysis.setFormatter(new GuiAnalysisFormatter());
@@ -281,6 +318,8 @@ public final class Utils {
 			System.err.printf("Grammar exception: %s\n", e);
 //			Log.logError(e, "Grammar Exception");
 		}
+		debugPrint("Inserting into cache...");
+		parseCache.put(sentence, result.toString());
 		return result.toString();
 	}
 

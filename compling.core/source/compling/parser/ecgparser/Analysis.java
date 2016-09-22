@@ -16,6 +16,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.logging.Logger;
 
+
+
 import compling.grammar.ecg.ECGConstants;
 import compling.grammar.ecg.ECGGrammarUtilities;
 import compling.grammar.ecg.Grammar;
@@ -41,6 +43,8 @@ import compling.util.Pair;
 import compling.util.math.SloppyMath;
 
 public class Analysis implements Cloneable {
+	
+	protected boolean DEBUG = false;
 
   protected static BasicScorer semSpecScorer = null;
   protected static AnalysisFormatter formatter = new DefaultAnalysisFormatter();
@@ -132,6 +136,7 @@ public class Analysis implements Cloneable {
     }
     featureStructure.getSlot(new ECGSlotChain(m)).setRealFiller(true);
 
+    
     // constructional block constituents
     for (Role r : headCxn.getConstructionalBlock().getElements()) {
       featureStructure.addSlot(new ECGSlotChain(r));
@@ -154,7 +159,8 @@ public class Analysis implements Cloneable {
         }
       }
     }
-
+    
+    
     // meaning block constraints
     for (Constraint constraint : headCxn.getMeaningBlock().getConstraints()) {
       if (!constraint.overridden()) {
@@ -211,7 +217,8 @@ public class Analysis implements Cloneable {
       for (Constraint constraint : headCxn.getSchemaTypeSystem().get(headCxn.getMeaningBlock().getType()).getContents()
               .getConstraints()) {
         // addConstraint(constraint, m, "");
-        if (!constraint.overridden()) {
+    	  
+        if (!constraint.overridden() && !constraintInCxn(headCxn, constraint)) {
           if (addConstraint(constraint, m, "") == false) {
             logger.warning("problem with " + constraint);
             return false;
@@ -223,6 +230,38 @@ public class Analysis implements Cloneable {
     return addAdditionalConstraints();
 
     // return true;
+  }
+  
+  public boolean constraintInCxn(Construction cxn, Constraint c) {
+	  boolean found = false;
+	  if (!c.isAssign()) {
+		  return false;
+	  }
+	  // Meaning Block, check for constraint.
+	  for (Constraint constraint : cxn.getMeaningBlock().getConstraints()) {
+		  String cxnConstraint = constraint.getArguments().get(0).toString().replace("self.", "").replace("m.", "");
+		  if (cxnConstraint.equals(c.getArguments().get(0).toString())
+				  && constraint.isAssign() && c.isAssign()) {
+			  return true;
+		  }
+	  }
+	  /* Constructional Block: might be unnecessary
+	  for (Constraint constraint : cxn.getConstructionalBlock().getConstraints()) {
+		  String cxnConstraint = constraint.getArguments().get(0).toString().replace("self.", "").replace("m.", "");
+		  if (cxnConstraint.equals(c.getArguments().get(0).toString())
+				  && constraint.isAssign() && c.isAssign()) {
+			  return true;
+		  }
+	  }
+	  // Form Block: might be unnecessary
+	  for (Constraint constraint : cxn.getFormBlock().getConstraints()) {
+		  String cxnConstraint = constraint.getArguments().get(0).toString().replace("self.", "").replace("f.", "");
+		  if (cxnConstraint.equals(c.getArguments().get(0).toString())
+				  && constraint.isAssign() && c.isAssign()) {
+			  return true;
+		  }
+	  } */
+	  return false;
   }
 
   public boolean addAdditionalConstraints() {
@@ -282,7 +321,7 @@ public class Analysis implements Cloneable {
     }
     myMiniSemSpecs = new PossibleSemSpecs(chains, types, frameRoles);
   }
-
+   
   public boolean addConstraint(Constraint constraint, Role prepend, String prefix) {
     if (constraint.isAssign()) {
       return addConstraint(new Constraint(constraint.getOperator(), new ECGSlotChain(prepend, constraint.getArguments()
@@ -303,10 +342,10 @@ public class Analysis implements Cloneable {
 
   public boolean addConstraint(Constraint constraint, String prefix) {
     if (constraint.getOperator().equals(ECGConstants.ASSIGN)) {
-      if (constraint.getValue().charAt(0) == ECGConstants.CONSTANTFILLERPREFIX) {
-        return featureStructure.fill(new ECGSlotChain(prefix, constraint.getArguments().get(0)), constraint.getValue());
-      }
-      else if (constraint.getValue().charAt(0) != ECGConstants.CONSTANTFILLERPREFIX) { // then
+    	if (constraint.getValue().charAt(0) == ECGConstants.CONSTANTFILLERPREFIX) {
+    		return featureStructure.fill(new ECGSlotChain(prefix, constraint.getArguments().get(0)), constraint.getValue());
+    	}
+    	else if (constraint.getValue().charAt(0) != ECGConstants.CONSTANTFILLERPREFIX) { // then
                                                                                        // this
                                                                                        // is
                                                                                        // a
@@ -326,6 +365,42 @@ public class Analysis implements Cloneable {
                 typeConstraint);
       }
       return true;
+    }
+    
+    else if (constraint.getOperator().equals(ECGConstants.NEGATE)) {
+        TypeConstraint typeConstraint = null;
+        if (constraint.getValue().charAt(0) == ECGConstants.ONTOLOGYPREFIX) {
+          typeConstraint = getExternalTypeSystem().getCanonicalTypeConstraint(constraint.getValue().substring(1));
+        }
+        else {
+          // XXX: Only Schemas can be literal fillers! (lucag)
+          typeConstraint = getSchemaTypeSystem().getCanonicalTypeConstraint(constraint.getValue());
+        }
+        if (typeConstraint == null) {
+          throw new ParserException("Type " + constraint.getValue() + " in constraint " + constraint + " is undefined");
+        }
+        TypeConstraint tc = typeConstraint.clone();
+        tc.setNegated(true);
+        featureStructure.getSlot(new ECGSlotChain(prefix, constraint.getArguments().get(0))).setTypeConstraint(
+                tc);
+    	return true;
+    }
+    	
+    else if (constraint.getOperator().equals(ECGConstants.UNIDIRECTIONAL_ASSIGN)) {
+        TypeConstraint typeConstraint = null;
+        if (!(constraint.getValue().charAt(0) == ECGConstants.ONTOLOGYPREFIX)) {
+        	throw new ParserException("Unidirectional assignment operator " + constraint.getOperator() + " in '" + constraint + "' requires an ontology constraint."); 
+        }
+        typeConstraint = getExternalTypeSystem().getCanonicalTypeConstraint(constraint.getValue().substring(1));
+        if (typeConstraint == null) {
+            throw new ParserException("Type " + constraint.getValue() + " in constraint " + constraint + " is undefined");
+          }
+        TypeConstraint tc = typeConstraint.clone();
+        tc.setUnidirectional(true);
+        featureStructure.getSlot(new ECGSlotChain(prefix, constraint.getArguments().get(0))).setTypeConstraint(
+                  tc);
+        
+        return true;
     }
     else if (constraint.getOperator().equals(ECGConstants.IDENTIFY)) {
       SlotChain sc0 = constraint.getArguments().get(0);
@@ -355,6 +430,14 @@ public class Analysis implements Cloneable {
       // TypeConstraint tc1 = featureStructure.getSlot(sc1).getTypeConstraint();
 
       boolean success = featureStructure.coindex(sc0, sc1);
+      
+      //System.out.println("======");
+      //System.out.println(success); 
+      if (!success) {
+    	  System.out.println("----------------");
+    	  System.out.println(sc0);
+    	  System.out.println(sc1);
+      }
 
       return success;
     }
@@ -444,8 +527,11 @@ public class Analysis implements Cloneable {
         gapFillerPSS = that.getPossibleSemSpecs();
         gapFillerType = that.getHeadCxn();
         gapFillerChain = ecgsc;
-        System.out.println("binding to extraposed role. role name is: " + role.getName() + " rootslotid:"
-                + getFeatureStructure().getMainRoot().getID());
+        String message = "binding to extraposed role. role name is: " + role.getName() + " rootslotid:"
+                + getFeatureStructure().getMainRoot().getID();
+        debugPrint(message);
+//        System.out.println("binding to extraposed role. role name is: " + role.getName() + " rootslotid:"
+//                + getFeatureStructure().getMainRoot().getID());
       }
       else if (this.hasGapFiller()) {
         for (CxnalSpan span : that.gappedSpans) {
@@ -476,7 +562,14 @@ public class Analysis implements Cloneable {
     }
   }
 
-  public boolean hasGapFiller() {
+  private void debugPrint(String message) {
+	if (DEBUG) {
+		System.out.println(message);
+	}
+	
+}
+
+public boolean hasGapFiller() {
     return gapFillerPSS != null;
   }
 
@@ -681,6 +774,8 @@ public class Analysis implements Cloneable {
       throw new ParserException("Inexplicable meltdown in Analysis.clone: " + e);
     }
   }
+  
+
 
   public static void main(String[] args) throws IOException, TypeSystemException {
     String ontFile = null;

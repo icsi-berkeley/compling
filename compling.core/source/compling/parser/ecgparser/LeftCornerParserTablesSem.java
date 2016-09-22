@@ -308,6 +308,7 @@ public class LeftCornerParserTablesSem {
     public List<SlotChain> getCanonicalChains(Construction cxn) {
       return canonicalChains.get(cxn);
     }
+    
 
     public List<Pair<TypeConstraint, Role>> getFrameRoles(Construction cxn, SlotChain sc) {
       if (canonicalRoleTypes.get(cxn) != null) {
@@ -459,13 +460,14 @@ public class LeftCornerParserTablesSem {
     }
 
     // XXX: This has horrible performance
+    // TODO
     public SlotConnectionTracker(LCPGrammarWrapper g, CloneTable ct, UnifyTable ut, SlotChainTables sct,
             ConstituentsToSatisfyCostTable ctsct, ConstituentExpansionCostTable cect, ConstituentLocalityCostTable clct) {
       final int MAXDIST = 10;
       setup(g, ct, ut, sct, ctsct, cect, clct);
 
       // TODO: 1. Build the list of all the roles here!
-      // TODO: 2. Memoize getRules
+      // TODO: 2. Memoize getRules (DONE)
 
       for (int i = 1; i < MAXDIST; i++) {
         // System.out.println("-----------------------------------------------------------------------------------------------------\n"+"i="+i+"\n----");

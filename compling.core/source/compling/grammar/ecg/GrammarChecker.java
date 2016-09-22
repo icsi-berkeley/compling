@@ -7,6 +7,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+
 import compling.grammar.GrammarException;
 import compling.grammar.ecg.Grammar.Block;
 import compling.grammar.ecg.Grammar.Construction;
@@ -27,6 +28,8 @@ import compling.grammar.unificationgrammar.UnificationGrammar.Constraint;
 import compling.grammar.unificationgrammar.UnificationGrammar.Role;
 import compling.grammar.unificationgrammar.UnificationGrammar.SlotChain;
 import compling.grammar.unificationgrammar.UnificationGrammar.TypeConstraint;
+import compling.gui.util.Utils;
+import compling.parser.ParserException;
 import compling.util.Arrays;
 import compling.util.Interner;
 
@@ -50,9 +53,10 @@ public class GrammarChecker {
 			checkSchemas(g, errorListener);
 			checkMaps(g, errorListener);
 			checkConstructions(g, errorListener);
+			checkTokensAndMorphs(g, errorListener);
 		} catch (TypeSystemException x) {
-			for (GrammarError e : x.getErrors())
-				errorListener.notify(e.getMessage(), e.getLocation(), e.getSeverity());
+			for (GrammarError e : x.getErrors()) 
+				errorListener.notify(e.getMessage(), e.getLocation(), e.getSeverity()); 
 		}
 		return errorListener.asStringBuffer();
 	}
@@ -60,6 +64,15 @@ public class GrammarChecker {
 	public static void setErrorListener(ILoggingErrorListener errorListener) {
 		GrammarChecker.errorListener = errorListener;
 	}
+	
+	private static void checkTokensAndMorphs(Grammar g, IErrorListener errorListener) {
+		try {
+			g.buildTokenAndMorpher();
+		} catch (ParserException e) {
+			errorListener.notify(e.getMessage(), Severity.EXCEPTION); 
+		} 
+	}
+	
 
 	private static void checkSchemas(Grammar g, IErrorListener errorListener)
 			throws TypeSystemException {
@@ -607,9 +620,22 @@ public class GrammarChecker {
 			for (SlotChain sc : c.getArguments()) {
 				newArgs.add(new ECGSlotChain(sc.toString()));
 			}
+			Constraint newConstraint = new Constraint(c.getOperator(), c.getSource(), c.getValue(), c.overridden(), newArgs);
+			//if (!newConstraint.get)
+			boolean found = true;
+			// seantrott: added check for constraints
+			// Only override if both are "assign" constraints.
+			for (Constraint c2 : child.getConstraints()) {
+				if (c2.getArguments().get(0).toString().equals(c.getArguments().get(0).toString())
+						&& c.isAssign() && c2.isAssign()) {
+					found = false;
+				}
+			}
+			if (found) {
 			child.getConstraints().add(
 					new Constraint(c.getOperator(), c.getSource(), c.getValue(), c.overridden(),
-							newArgs));
+							newArgs, false));
+			}
 		}
 		// =======
 		// private static void addParentInfo(Block child, Block parent, String
@@ -623,7 +649,8 @@ public class GrammarChecker {
 		// c.getSource(), c.getValue(), c.overridden(), newArgs));
 		// }
 		// >>>>>>> 1.29
-		child.getConstraints().addAll(parent.getConstraints());
+		// TODO: This is a big thing to comment out. Check.
+		//child.getConstraints().addAll(parent.getConstraints());
 		addInheritedRoles(child.getElements(), parent.getElements(), childPrimitive, errorListener);
 		addInheritedRoles(child.getEvokedElements(), parent.getEvokedElements(), childPrimitive,
 				errorListener);
@@ -647,6 +674,7 @@ public class GrammarChecker {
 			Grammar g, IErrorListener errorListener) {
 		String source = primitive.getName();
 		for (Role r : roles) {
+
 			r.setSource(source);
 			if (r.getName().equals(ECGConstants.FORM_POLE)
 					|| r.getName().equals(ECGConstants.MEANING_POLE)) {
